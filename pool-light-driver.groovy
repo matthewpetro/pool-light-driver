@@ -1,4 +1,3 @@
-import groovy.json.JsonSlurper
 import groovy.transform.Field
 
 @Field static Map lightEffects = [
