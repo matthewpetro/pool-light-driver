@@ -16,17 +16,21 @@ import groovy.transform.Field
     12:'Magenta'
 ]
 
+@Field static String POWER_STATE_ON = 'on'
+@Field static String POWER_STATE_OFF = 'off'
+
 metadata {
-    definition (name: "Pool Light", namespace: "Petro", author: "Matthew Petro") {
-        capability "Light"
-        capability "LightEffects"
-        command "setEffectByName", [[name: "effectName", type: "STRING", description: "The name of the effect to set"]]
+    definition(name: 'Pool Light', namespace: 'Petro', author: 'Matthew Petro') {
+        capability 'Light'
+        capability 'LightEffects'
+        capability 'Refresh'
+        command 'setEffectByName', [[name: 'effectName', type: 'STRING', description: 'The name of the effect to set']]
     }
 
-     preferences {
-        input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
-        input name: "controllerAddress", type: "text", title: "Controller IP address"
-        input name: "controllerPort", type: "number", title: "Controller port", defaultValue: 80, range: "1..65535"
+    preferences {
+        input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', defaultValue: true
+        input name: 'controllerAddress', type: 'text', title: 'Controller IP address'
+        input name: 'controllerPort', type: 'number', title: 'Controller port', defaultValue: 80, range: '1..65535'
     }
 }
 
@@ -35,14 +39,59 @@ def installed() {
     sendEvent(name:'lightEffects', value:le)
 }
 
+def refresh() {
+    if (txtEnable) log.info 'refreshing'
+    try {
+        httpGet(getRefreshUrl()) { resp ->
+            if (txtEnable) log.debug "response: ${resp.data}"
+            def descriptionText = "${device.displayName}, colorMode is EFFECTS"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+
+            def controllerPower = resp.data.variables.power
+            if (controllerPower && !controllerPower.equalsIgnoreCase(device.currentValue('switch'))) {
+                descriptionText = "${device.displayName}, setting switch to ${controllerPower}"
+                if (txtEnable) log.info "${descriptionText}"
+                sendEvent(name:'switch', value:controllerPower, descriptionText:descriptionText)
+            }
+
+            def controllerScene = resp.data.variables.scene
+            if (controllerScene && !controllerScene.equalsIgnoreCase(device.currentValue('effectName'))) {
+                def selectedEffect = lightEffects.find { it.value.equalsIgnoreCase(controllerScene) }
+                descriptionText = "${device.displayName}, effect is ${selectedEffect.value}"
+                if (txtEnable) log.info "${descriptionText}"
+                sendEvent(name:'effectName', value:selectedEffect.value, descriptionText:descriptionText)
+            }
+        }
+    } catch (Exception e) {
+        log.error "Error while refreshing: ${e.message}"
+    }
+}
+
 def on() {
-    sendEvent(name:'switch', value:'on')
-    // send device event here
+    if (txtEnable) log.info "${device.displayName}, turning on"
+    try {
+        httpGet(getPowerUrl(POWER_STATE_ON)) { resp ->
+            def descriptionText = "${device.displayName}, switch was set to on"
+            if (txtEnable) log.info "${descriptionText}"
+            if (resp.success) sendEvent(name:'switch', value:'on', descriptionText:descriptionText)
+        }
+    } catch (Exception e) {
+        log.error "Error turning on: ${e.message}"
+    }
 }
 
 def off() {
-    sendEvent(name:'switch', value:'off')
-    // send device event here
+    if (txtEnable) log.info "${device.displayName}, turning off"
+    try {
+        httpGet(getPowerUrl(POWER_STATE_OFF)) { resp ->
+            def descriptionText = "${device.displayName}, switch was set to off"
+            if (txtEnable) log.info "${descriptionText}"
+            if (resp.success) sendEvent(name:'switch', value:'off', descriptionText:descriptionText)
+        }
+    } catch (Exception e) {
+        log.error "Error turning off: ${e.message}"
+    }
 }
 
 def setEffectByName(String effect) {
@@ -56,32 +105,50 @@ def setEffect(id) {
 }
 
 def setSelectedEffect(Map.Entry effect) {
-    def descriptionText = "${device.displayName}, effect was set to ${effect}"
-    if (txtEnable) log.info "${descriptionText}"
-    sendEvent(name:'effectName', value:effect, descriptionText:descriptionText)
-    descriptionText = "${device.displayName}, colorMode is EFFECTS"
-    if (txtEnable) log.info "${descriptionText}"
-    sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
-    state.currentEffectId = effect.key
-    // send device event here
+    try {
+        httpGet(getEffectUrl(effect.value)) { resp ->
+            def descriptionText = "${device.displayName}, effect was set to ${effect.value}"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'effectName', value:effect.value, descriptionText:descriptionText)
+            descriptionText = "${device.displayName}, colorMode is EFFECTS"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+        }
+    } catch (Exception e) {
+        log.error "Error setting effect: ${e.message}"
+    }
 }
 
 def setNextEffect() {
+    def currentEffectId = lightEffects.find { it.value.equalsIgnoreCase(device.currentValue('effectName')) }.key
     def nextEffectId
-    if (null == state.currentEffectId || state.currentEffectId >= lightEffects.size()) {
-       nextEffectId = 1
+    if (null == currentEffectId || currentEffectId >= lightEffects.size()) {
+        nextEffectId = 1
     } else {
-       nextEffectId = state.currentEffectId + 1
+        nextEffectId = currentEffectId + 1
     }
     setEffect(nextEffectId)
 }
 
 def setPreviousEffect() {
+    def currentEffectId = lightEffects.find { it.value.equalsIgnoreCase(device.currentValue('effectName')) }.key
     def previousEffectId
-    if (null == state.currentEffectId || state.currentEffectId <= 1) {
-       previousEffectId = lightEffects.size()
+    if (null == currentEffectId || currentEffectId <= 1) {
+        previousEffectId = lightEffects.size()
     } else {
-       previousEffectId = state.currentEffectId - 1
+        previousEffectId = currentEffectId - 1
     }
     setEffect(previousEffectId)
+}
+
+def getPowerUrl(String state) {
+    return "http://${controllerAddress}:${controllerPort}/power?params=${state}"
+}
+
+def getRefreshUrl() {
+    return "http://${controllerAddress}:${controllerPort}/"
+}
+
+def getEffectUrl(String effectName) {
+    return "http://${controllerAddress}:${controllerPort}/scene?params=${effectName}"
 }
