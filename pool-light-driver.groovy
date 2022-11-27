@@ -20,6 +20,7 @@ import groovy.transform.Field
 
 metadata {
     definition(name: 'Pool Light', namespace: 'Petro', author: 'Matthew Petro') {
+        capability 'ColorMode'
         capability 'Light'
         capability 'LightEffects'
         capability 'Refresh'
@@ -43,9 +44,11 @@ def refresh() {
     try {
         httpGet(getRefreshUrl()) { resp ->
             if (txtEnable) log.debug "response: ${resp.data}"
-            def descriptionText = "${device.displayName}, colorMode is EFFECTS"
-            if (txtEnable) log.info "${descriptionText}"
-            sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+            if (!device.currentValue('colorMode') || !device.currentValue('colorMode').equalsIgnoreCase('EFFECTS')) {
+                def descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
+                if (txtEnable) log.info "${descriptionText}"
+                sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+            }
 
             def controllerPower = resp.data.variables.power
             if (controllerPower && !controllerPower.equalsIgnoreCase(device.currentValue('switch'))) {
@@ -109,9 +112,11 @@ def setSelectedEffect(Map.Entry effect) {
             def descriptionText = "${device.displayName}, effect was set to ${effect.value}"
             if (txtEnable) log.info "${descriptionText}"
             sendEvent(name:'effectName', value:effect.value, descriptionText:descriptionText)
-            descriptionText = "${device.displayName}, colorMode is EFFECTS"
-            if (txtEnable) log.info "${descriptionText}"
-            sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+            if (!device.currentValue('colorMode') || !device.currentValue('colorMode').equalsIgnoreCase('EFFECTS')) {
+                descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
+                if (txtEnable) log.info "${descriptionText}"
+                sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+            }
         }
     } catch (Exception e) {
         log.error "Error setting effect: ${e.message}"
