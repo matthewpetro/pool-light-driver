@@ -6,7 +6,7 @@ import groovy.transform.Field
     3:'Romance',
     4:'Caribbean',
     5:'American',
-    6:'California Sunset',
+    6:'California',
     7:'Royal',
     8:'Blue',
     9:'Green',
@@ -24,6 +24,7 @@ metadata {
         capability 'Light'
         capability 'LightEffects'
         capability 'Refresh'
+        capability 'Switch'
         command 'setEffectByName', [[name: 'effectName', type: 'STRING', description: 'The name of the effect to set']]
     }
 
