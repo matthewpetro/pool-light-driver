@@ -41,59 +41,56 @@ def installed() {
 }
 
 def refresh() {
-    if (txtEnable) log.info 'refreshing'
-    try {
-        httpGet(getRefreshUrl()) { resp ->
-            if (txtEnable) log.debug "response: ${resp.data}"
-            if (!device.currentValue('colorMode') || !device.currentValue('colorMode').equalsIgnoreCase('EFFECTS')) {
-                def descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
-                if (txtEnable) log.info "${descriptionText}"
-                sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
-            }
+    if (txtEnable) log.info "${device.displayName}, refreshing"
+    asynchttpGet('handleRefresh', [uri: getRefreshUrl(), timeout: 10])
+}
 
-            def controllerPower = resp.data.variables.power
-            if (controllerPower && !controllerPower.equalsIgnoreCase(device.currentValue('switch'))) {
-                descriptionText = "${device.displayName}, setting switch to ${controllerPower}"
-                if (txtEnable) log.info "${descriptionText}"
-                sendEvent(name:'switch', value:controllerPower, descriptionText:descriptionText)
-            }
-
-            def controllerScene = resp.data.variables.scene
-            if (controllerScene && !controllerScene.equalsIgnoreCase(device.currentValue('effectName'))) {
-                def selectedEffect = lightEffects.find { it.value.equalsIgnoreCase(controllerScene) }
-                descriptionText = "${device.displayName}, effect is ${selectedEffect.value}"
-                if (txtEnable) log.info "${descriptionText}"
-                sendEvent(name:'effectName', value:selectedEffect.value, descriptionText:descriptionText)
-            }
+def handleRefresh(response, data) {
+    if (!response.error) {
+        if (txtEnable) log.info "${device.displayName}, received refreshed data from controller"
+        if (!device.currentValue('colorMode') || !device.currentValue('colorMode').equalsIgnoreCase('EFFECTS')) {
+            def descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
         }
-    } catch (Exception e) {
-        log.error "Error while refreshing: ${e.message}"
+
+        def controllerPower = response.json.variables.power
+        if (controllerPower && !controllerPower.equalsIgnoreCase(device.currentValue('switch'))) {
+            descriptionText = "${device.displayName}, setting switch to ${controllerPower}"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'switch', value:controllerPower, descriptionText:descriptionText)
+        }
+
+        def controllerScene = response.json.variables.scene
+        if (controllerScene && !controllerScene.equalsIgnoreCase(device.currentValue('effectName'))) {
+            def selectedEffect = lightEffects.find { it.value.equalsIgnoreCase(controllerScene) }
+            descriptionText = "${device.displayName}, effect is ${selectedEffect.value}"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'effectName', value:selectedEffect.value, descriptionText:descriptionText)
+        }
+    } else {
+        log.error "Error refreshing: ${response.status} ${response.errorMessage}"
     }
 }
 
 def on() {
     if (txtEnable) log.info "${device.displayName}, turning on"
-    try {
-        httpGet(getPowerUrl(POWER_STATE_ON)) { resp ->
-            def descriptionText = "${device.displayName}, switch was set to on"
-            if (txtEnable) log.info "${descriptionText}"
-            if (resp.success) sendEvent(name:'switch', value:'on', descriptionText:descriptionText)
-        }
-    } catch (Exception e) {
-        log.error "Error turning on: ${e.message}"
-    }
+    asynchttpGet('handlePowerChange', [uri: getPowerUrl(POWER_STATE_ON), timeout: 10])
 }
 
 def off() {
     if (txtEnable) log.info "${device.displayName}, turning off"
-    try {
-        httpGet(getPowerUrl(POWER_STATE_OFF)) { resp ->
-            def descriptionText = "${device.displayName}, switch was set to off"
-            if (txtEnable) log.info "${descriptionText}"
-            if (resp.success) sendEvent(name:'switch', value:'off', descriptionText:descriptionText)
-        }
-    } catch (Exception e) {
-        log.error "Error turning off: ${e.message}"
+    asynchttpGet('handlePowerChange', [uri: getPowerUrl(POWER_STATE_OFF), timeout: 10])
+}
+
+def handlePowerChange(response, data) {
+    if (!response.error) {
+        String powerState = response.json.return_value == 1 ? POWER_STATE_ON : POWER_STATE_OFF
+        def descriptionText = "${device.displayName}, switch was set to ${powerState}"
+        if (txtEnable) log.info "${descriptionText}"
+        sendEvent(name:'switch', value:"${powerState}", descriptionText:descriptionText)
+    } else {
+        log.error "Error setting power state: ${response.status} ${response.errorMessage}"
     }
 }
 
@@ -108,19 +105,27 @@ def setEffect(id) {
 }
 
 def setSelectedEffect(Map.Entry effect) {
-    try {
-        httpGet(getEffectUrl(effect.value)) { resp ->
-            def descriptionText = "${device.displayName}, effect was set to ${effect.value}"
-            if (txtEnable) log.info "${descriptionText}"
-            sendEvent(name:'effectName', value:effect.value, descriptionText:descriptionText)
-            if (!device.currentValue('colorMode') || !device.currentValue('colorMode').equalsIgnoreCase('EFFECTS')) {
-                descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
-                if (txtEnable) log.info "${descriptionText}"
-                sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
-            }
+    if (txtEnable) log.info "${device.displayName}, setting effect to ${effect.value}"
+    asynchttpGet('handleEffectChange', [uri: getEffectUrl(effect.value), timeout: 10])
+}
+
+def handleEffectChange(response, data) {
+    if (!response.error) {
+        String effectName = lightEffects.find { it.key == response.json.return_value }.value
+        if (!effectName) {
+            log.error "Error setting effect! ID ${response.json.return_value} not found in lightEffects map."
+            return
         }
-    } catch (Exception e) {
-        log.error "Error setting effect: ${e.message}"
+        def descriptionText = "${device.displayName}, effect was set to ${effectName}"
+        if (txtEnable) log.info "${descriptionText}"
+        sendEvent(name:'effectName', value:effectName, descriptionText:descriptionText)
+        if (!device.currentValue('colorMode') || !device.currentValue('colorMode').equalsIgnoreCase('EFFECTS')) {
+            descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+        }
+    } else {
+        log.error "Error setting effect: ${response.status} ${response.errorMessage}"
     }
 }
 
