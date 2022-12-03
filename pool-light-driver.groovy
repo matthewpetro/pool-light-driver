@@ -42,7 +42,7 @@ def installed() {
 
 def refresh() {
     if (txtEnable) log.info "${device.displayName}, refreshing"
-    asynchttpGet('handleRefresh', [uri: getRefreshUrl(), timeout: 10])
+    asynchttpGet('handleRefresh', [uri: getRefreshUrl(), timeout: 5])
 }
 
 def handleRefresh(response, data) {
@@ -75,12 +75,12 @@ def handleRefresh(response, data) {
 
 def on() {
     if (txtEnable) log.info "${device.displayName}, turning on"
-    asynchttpGet('handlePowerChange', [uri: getPowerUrl(POWER_STATE_ON), timeout: 10])
+    asynchttpGet('handlePowerChange', [uri: getPowerUrl(POWER_STATE_ON), timeout: 5])
 }
 
 def off() {
     if (txtEnable) log.info "${device.displayName}, turning off"
-    asynchttpGet('handlePowerChange', [uri: getPowerUrl(POWER_STATE_OFF), timeout: 10])
+    asynchttpGet('handlePowerChange', [uri: getPowerUrl(POWER_STATE_OFF), timeout: 5])
 }
 
 def handlePowerChange(response, data) {
@@ -106,7 +106,7 @@ def setEffect(id) {
 
 def setSelectedEffect(Map.Entry effect) {
     if (txtEnable) log.info "${device.displayName}, setting effect to ${effect.value}"
-    asynchttpGet('handleEffectChange', [uri: getEffectUrl(effect.value), timeout: 10])
+    asynchttpGet('handleEffectChange', [uri: getEffectUrl(effect.value), timeout: 20])
 }
 
 def handleEffectChange(response, data) {
@@ -123,6 +123,11 @@ def handleEffectChange(response, data) {
             descriptionText = "${device.displayName}, setting colorMode to EFFECTS"
             if (txtEnable) log.info "${descriptionText}"
             sendEvent(name:'colorMode', value:'EFFECTS', descriptionText:descriptionText)
+        }
+        if (!device.currentValue('switch').equalsIgnoreCase(POWER_STATE_ON)) {
+            descriptionText = "${device.displayName}, setting switch to ${POWER_STATE_ON}"
+            if (txtEnable) log.info "${descriptionText}"
+            sendEvent(name:'switch', value:POWER_STATE_ON, descriptionText:descriptionText)
         }
     } else {
         log.error "Error setting effect: ${response.status} ${response.errorMessage}"
