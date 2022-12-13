@@ -30,14 +30,34 @@ metadata {
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', defaultValue: true
+        input name: 'refreshInterval', type: 'number', title: 'Number of hours between automatic refreshes of device state. 0 means no automatic refresh.', defaultValue: 1, range: '0..23'
         input name: 'controllerAddress', type: 'text', title: 'Controller IP address'
         input name: 'controllerPort', type: 'number', title: 'Controller port', defaultValue: 80, range: '1..65535'
     }
 }
 
 def installed() {
+    if (txtEnable) log.debug "${device.displayName} installed"
     def le = new groovy.json.JsonBuilder(lightEffects)
     sendEvent(name:'lightEffects', value:le)
+    initialize()
+}
+
+def uninstalled() {
+    if (txtEnable) log.debug "${device.displayName} uninstalled"
+    unschedule('refresh')
+}
+
+def updated() {
+    if (txtEnable) log.debug "${device.displayName} updated"
+    initialize()
+}
+
+def initialize() {
+    unschedule('refresh')
+    if (refreshInterval > 0) {
+        schedule("0 * */${refreshInterval} * * ? *", 'refresh')
+    }
 }
 
 def refresh() {
