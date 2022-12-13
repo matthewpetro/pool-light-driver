@@ -30,7 +30,7 @@ metadata {
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', defaultValue: true
-        input name: 'refreshInterval', type: 'number', title: 'Number of hours between automatic refreshes of device state. 0 means no automatic refresh.', defaultValue: 1, range: '0..23'
+        input name: 'refreshInterval', type: 'number', title: 'Number of minutes between automatic refreshes of device state. 0 means no automatic refresh.', defaultValue: 60, range: '0..1440'
         input name: 'controllerAddress', type: 'text', title: 'Controller IP address'
         input name: 'controllerPort', type: 'number', title: 'Controller port', defaultValue: 80, range: '1..65535'
     }
@@ -54,9 +54,17 @@ def updated() {
 }
 
 def initialize() {
-    unschedule('refresh')
+    pingController()
+    // unschedule('refresh')
+    // if (refreshInterval > 0) {
+    //     schedule("0 * */${refreshInterval} * * ? *", 'refresh')
+    // }
+}
+
+def pingController() {
+    refresh()
     if (refreshInterval > 0) {
-        schedule("0 * */${refreshInterval} * * ? *", 'refresh')
+        runIn(refreshInterval * 60, 'pingController', [overwrite: true])
     }
 }
 
