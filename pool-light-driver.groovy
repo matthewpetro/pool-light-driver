@@ -55,10 +55,6 @@ def updated() {
 
 def initialize() {
     pingController()
-    // unschedule('refresh')
-    // if (refreshInterval > 0) {
-    //     schedule("0 * */${refreshInterval} * * ? *", 'refresh')
-    // }
 }
 
 def pingController() {
@@ -92,9 +88,11 @@ def handleRefresh(response, data) {
         def controllerScene = response.json.variables.scene
         if (controllerScene && !controllerScene.equalsIgnoreCase(device.currentValue('effectName'))) {
             def selectedEffect = lightEffects.find { it.value.equalsIgnoreCase(controllerScene) }
-            descriptionText = "${device.displayName}, effect is ${selectedEffect.value}"
-            if (txtEnable) log.info "${descriptionText}"
-            sendEvent(name:'effectName', value:selectedEffect.value, descriptionText:descriptionText)
+            if (null != selectedEffect) {
+                descriptionText = "${device.displayName}, effect is ${selectedEffect.value}"
+                if (txtEnable) log.info "${descriptionText}"
+                sendEvent(name:'effectName', value:selectedEffect.value, descriptionText:descriptionText)
+            }
         }
     } else {
         log.error "Error refreshing: ${response.status} ${response.errorMessage}"
