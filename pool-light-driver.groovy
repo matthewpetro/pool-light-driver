@@ -19,7 +19,7 @@ import groovy.transform.Field
 @Field static String POWER_STATE_OFF = 'off'
 
 metadata {
-    definition(name: 'Pool Light', namespace: 'Petro', author: 'Matthew Petro') {
+    definition(name: 'Pool Light', namespace: 'MPetro', author: 'Matthew Petro') {
         capability 'ColorMode'
         capability 'Light'
         capability 'LightEffects'
